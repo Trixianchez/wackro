@@ -12,6 +12,18 @@ import main as main_module  # noqa: E402
 from config import APP_NAME, APP_VERSION  # noqa: E402
 
 
+
+class FakeAdminWin:
+    def __init__(self, admin, runs):
+        self.admin, self.runs, self.started = admin, runs, []
+
+    def is_admin(self):
+        return self.admin
+
+    def run_as_admin(self, program, parameters):
+        self.started.append((program, parameters))
+        return self.runs
+
 class FakeGuard:
     def __init__(self, free=True):
         self.free = free
@@ -64,6 +76,39 @@ class MainFlowTests(unittest.TestCase):
 
     def run_main(self, guard, app_factory):
         return main_module.main(guard_factory=lambda: guard, app_factory=app_factory, show=self.show)
+
+    def test_admin_flag_restarts_elevated_and_exits(self):
+        win = FakeAdminWin(admin=False, runs=True)
+        guard, apps = FakeGuard(), []
+        code = main_module.main(guard_factory=lambda: guard, app_factory=lambda: apps.append(FakeApp()) or apps[-1],
+                                show=self.show, argv=["--admin"], win32=win)
+        self.assertEqual(code, 0)
+        self.assertEqual(apps, [])                        # this copy never opened a window
+        self.assertEqual(guard.released, 0)               # nor took the single-instance lock
+        program, parameters = win.started[0]
+        self.assertIn("--admin", parameters)
+        self.assertEqual(program, sys.executable)
+
+    def test_admin_flag_when_already_admin_or_uac_refused_just_runs(self):
+        for win in (FakeAdminWin(admin=True, runs=True), FakeAdminWin(admin=False, runs=False)):
+            with self.subTest(admin=win.admin):
+                apps = []
+                code = main_module.main(guard_factory=FakeGuard, app_factory=lambda: apps.append(FakeApp()) or apps[-1],
+                                        show=self.show, argv=["--admin"], win32=win)
+                self.assertEqual(code, 0)
+                self.assertTrue(apps[0].ran)
+
+    def test_without_the_flag_nothing_is_asked(self):
+        win = FakeAdminWin(admin=False, runs=True)
+        self.assertFalse(main_module.restart_as_admin([], win))
+        self.assertEqual(win.started, [])
+
+    def test_frozen_restart_passes_only_the_arguments(self):
+        win = FakeAdminWin(admin=False, runs=True)
+        with mock.patch.object(sys, "frozen", True, create=True), \
+                mock.patch.object(sys, "executable", r"C:\Program Files\Wackro\Wackro.exe"):
+            self.assertTrue(main_module.restart_as_admin(["--admin"], win))
+        self.assertEqual(win.started, [(r"C:\Program Files\Wackro\Wackro.exe", "--admin")])
 
     def test_normal_run_returns_0_and_releases_the_lock(self):
         guard, apps = FakeGuard(), []

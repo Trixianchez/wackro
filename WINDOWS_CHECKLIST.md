@@ -174,3 +174,12 @@ Anything that failed or felt odd, with the log file if there was an error box.
 - [ ] **Settings > Recordings folder…** shows that path. **Browse…** to another folder, OK: the status line says the new folder and Save As… starts there. **Open folder** opens it in File Explorer.
 - [ ] Type `abc` (not a full path), OK: a red message, the box stays open. **Reset to default**, OK: back to Documents\Wackro.
 - [ ] Pick a folder on a USB stick, OK, remove the stick, Save As…: the box opens in Documents instead of failing.
+
+## Installer (1.7.5)
+- [ ] Run `Wackro-Setup-1.7.5.exe`. It asks **Install for all users / Install for me only**. Pick **me only**: no UAC prompt.
+- [ ] The **Recordings folder** page shows `Documents\Wackro`. Change it to another folder, finish with "Launch Wackro" ticked: Wackro starts (NOT as admin), Save As… opens in that folder.
+- [ ] Start menu has **Wackro**, **Wackro (Administrator)** and **Uninstall Wackro**. Desktop shortcut only if its box was ticked.
+- [ ] **Wackro (Administrator)**: a UAC prompt, then Wackro runs; it can play into an app run as administrator. Say **No** to UAC: Wackro still opens, without admin rights.
+- [ ] Run Setup again while Wackro is open: it says Wackro must be closed first. The recordings page remembers your folder.
+- [ ] Settings > Apps > Wackro > **Uninstall**: it asks "Also remove your Wackro settings and log?". **No**: `%LOCALAPPDATA%\Wackro` stays. Reinstall, uninstall, **Yes**: it's gone. Your recordings folder is untouched both times. The install folder and shortcuts are gone.
+- [ ] Install for **all users** (UAC): it goes to `C:\Program Files\Wackro`.

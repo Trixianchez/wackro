@@ -5,7 +5,7 @@
 #   Wackro-Admin.exe  same app with a UAC manifest, i.e. it always asks for administrator
 #                        rights. Set WACKRO_ADMIN=1 before running pyinstaller to get this one.
 #
-# Both are onefile, windowed (no console) builds. The window icon / exe icon comes from
+# Both are onefile, windowed (no console) builds (WACKRO_ONEDIR=1: the installer's folder build). The window icon / exe icon comes from
 # assets/Wackro.ico; without that file the build still works, just with the default icon.
 # The tray icons (assets/tray_*.png) are bundled too; without them the tray shows plain dots.
 
@@ -17,6 +17,12 @@ from PyInstaller.utils.hooks import collect_all
 
 ROOT = Path(SPECPATH)  # noqa: F821  (SPECPATH is provided by PyInstaller)
 ADMIN = os.environ.get("WACKRO_ADMIN") == "1"
+# WACKRO_ONEDIR=1: a normal folder (Wackro.exe + _internal\) for the installer. It starts faster
+# than the onefile exe (nothing to unpack each time) and antivirus flags it less. Admin rights come
+# from the "--admin" shortcut (main.py) instead of a second exe.
+ONEDIR = os.environ.get("WACKRO_ONEDIR") == "1"
+if ONEDIR and ADMIN:
+    raise SystemExit("WACKRO_ONEDIR and WACKRO_ADMIN can't be combined")
 NAME = "Wackro-Admin" if ADMIN else "Wackro"
 ICON = ROOT / "assets" / "Wackro.ico"
 TRAY_ICONS = [ROOT / "assets" / f"tray_{state}.png" for state in ("idle", "recording", "playing")]
@@ -61,18 +67,34 @@ a = Analysis(  # noqa: F821
 )
 pyz = PYZ(a.pure)  # noqa: F821
 
-exe = EXE(  # noqa: F821
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name=NAME,
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=False,          # UPX-packed exes get flagged by antivirus far more often
-    console=False,      # no console window; main.py logs to a file instead
-    icon=icon_path,
-    uac_admin=ADMIN,
-)
+if ONEDIR:
+    exe = EXE(  # noqa: F821
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        name=NAME,
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=False,
+        console=False,
+        icon=icon_path,
+    )
+    coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name=NAME)  # noqa: F821
+else:
+    exe = EXE(  # noqa: F821
+        pyz,
+        a.scripts,
+        a.binaries,
+        a.datas,
+        [],
+        name=NAME,
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=False,          # UPX-packed exes get flagged by antivirus far more often
+        console=False,      # no console window; main.py logs to a file instead
+        icon=icon_path,
+        uac_admin=ADMIN,
+    )

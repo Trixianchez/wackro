@@ -6,6 +6,7 @@ import logging
 import logging.handlers
 import sys
 import threading
+from pathlib import Path
 
 from config import APP_NAME, APP_VERSION, LOG_DIR, LOG_PATH, carry_over_old_data
 from single_instance import SingleInstance
@@ -69,7 +70,35 @@ def show_message(text: str, error: bool = False) -> None:
         logging.getLogger("main").warning("Could not show a message box", exc_info=True)
 
 
-def main(guard_factory=SingleInstance, app_factory=None, show=show_message) -> int:
+ADMIN_FLAG = "--admin"
+
+
+def restart_as_admin(argv: list, win32=None) -> bool:
+    """`--admin` (the "Wackro (Administrator)" shortcut): if this copy isn't elevated, start a
+    new one through UAC and return True (this one then exits). Already elevated, not asked for,
+    or the user said No to UAC: False, and this copy carries on (normal rights in that last case).
+
+    One installed program can so run either way, instead of shipping a second Admin exe."""
+    if ADMIN_FLAG not in argv:
+        return False
+    if win32 is None:
+        import winutil
+        win32 = winutil.get_win32()
+    if win32.is_admin():
+        return False
+    import subprocess
+    if getattr(sys, "frozen", False):
+        program, args = sys.executable, list(argv)
+    else:
+        program, args = sys.executable, [str(Path(__file__).resolve())] + list(argv)
+    if win32.run_as_admin(program, subprocess.list2cmdline(args)):
+        logging.getLogger("main").info("Restarted with administrator rights")
+        return True
+    logging.getLogger("main").warning("Administrator rights refused; running without them")
+    return False
+
+
+def main(guard_factory=SingleInstance, app_factory=None, show=show_message, argv=None, win32=None) -> int:
     """Start the app. Returns the process exit code. The arguments exist for the tests."""
     try:
         carried = carry_over_old_data()
@@ -81,6 +110,9 @@ def main(guard_factory=SingleInstance, app_factory=None, show=show_message) -> i
     log = logging.getLogger("main")
     log.info("Starting %s %s", APP_NAME, APP_VERSION)
     enable_dpi_awareness()
+
+    if restart_as_admin(list(sys.argv[1:] if argv is None else argv), win32):
+        return 0     # the elevated copy takes over (before the single-instance lock is taken)
 
     guard = guard_factory()
     if not guard.acquire():

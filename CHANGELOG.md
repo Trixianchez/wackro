@@ -12,8 +12,18 @@ All notable changes to Wackro (called PyReMouse, then Wackylloop, before 1.7.0).
   own with Browse…, go back with Reset to default, or open it in File Explorer. Documents is asked
   from Windows, so a OneDrive-moved Documents works. The folder is created when needed; if it
   can't be (missing drive, no rights), the box starts in Documents instead. New `folders.py`.
-- Ready for the installer: a recordings folder chosen in Setup (`install.json` next to the exe) is
-  used as the default.
+- **Installer: `Wackro-Setup-<version>.exe`** (Inno Setup, `installer/Wackro.iss`). Install for
+  all users (Program Files, asks for admin) or just for you (no admin); a page to pick the
+  recordings folder (saved as `install.json` next to the exe, used as the default); Start menu
+  shortcuts Wackro / Wackro (Administrator) / Uninstall and an optional desktop shortcut; waits
+  for a running Wackro to close; upgrades in place. Uninstall (Settings > Apps) asks whether to
+  remove the settings and log too; recordings are never deleted.
+- The installed copy is a folder build (`WACKRO_ONEDIR=1`): it starts faster than the one-file
+  exe and is flagged less by antivirus.
+- `--admin`: restarts Wackro through UAC with administrator rights (the "Wackro (Administrator)"
+  shortcut). If UAC is refused it runs without them.
+- `build.ps1 -Installer` builds the Setup exe (needs Inno Setup 6); the release workflow attaches
+  Setup plus both portable exes to every GitHub Release.
 
 ### Fixed
 - **Recordings were saved next to the exe** (e.g. in Downloads): the Save / Open boxes had no

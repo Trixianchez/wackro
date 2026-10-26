@@ -186,6 +186,7 @@ Two single-file Windows executables, built with PyInstaller from `Wackro.spec`:
 .\build.ps1 -Only Normal     # just Wackro.exe
 .\build.ps1 -Only Admin      # just Wackro-Admin.exe
 .\build.ps1 -SkipTests       # skip the unit tests
+.\build.ps1 -Installer       # also dist\Wackro-Setup-<version>.exe (needs Inno Setup 6, jrsoftware.org)
 ```
 
 If PowerShell refuses to run the script, run `Set-ExecutionPolicy -Scope Process Bypass` first. The

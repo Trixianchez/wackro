@@ -43,12 +43,19 @@ jobs:
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "version=$appVersion" >> $env:GITHUB_OUTPUT
 
-      - name: Test and build both exes
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Test and build both exes and the installer
         shell: pwsh
         run: |
           python -m venv venv
           .\venv\Scripts\Activate.ps1
-          .\build.ps1
+          .\build.ps1 -Installer
 
       - name: Write release notes with SHA-256 hashes
         shell: pwsh
@@ -56,6 +63,7 @@ jobs:
           $normal = (Get-FileHash -Algorithm SHA256 dist\Wackro.exe).Hash
           $admin = (Get-FileHash -Algorithm SHA256 dist\Wackro-Admin.exe).Hash
           $version = "${{ steps.version.outputs.version }}"
+          $setup = (Get-FileHash -Algorithm SHA256 "dist\Wackro-Setup-$version.exe").Hash
           # This version's CHANGELOG section (between its heading and the next one)
           $changelog = Get-Content CHANGELOG.md -Raw
           $pattern = '(?ms)^## \[' + [regex]::Escape($version) + '\][^\n]*\n(.*?)(?=^## \[|\z)'
@@ -65,10 +73,11 @@ jobs:
           **Automation that knows when to stop.** Record a task once, play it back exactly, and Wackro stops itself if a popup appears, the wrong program is in front, an app hangs, or the PC locks or sleeps.
 
           ### Which file?
-          - **Wackro.exe**: use this one.
-          - **Wackro-Admin.exe**: only for playing into programs running as administrator (asks for UAC).
+          - **Wackro-Setup-$version.exe**: recommended. Installs Wackro (for you or for all users), adds Start menu shortcuts (including "Wackro (Administrator)"), lets you pick where recordings are saved, and can be removed in Settings > Apps.
+          - **Wackro.exe**: portable, no install. Download and run.
+          - **Wackro-Admin.exe**: portable, always runs as administrator (only for playing into programs running as administrator).
 
-          No installer: download and run. Windows 10/11, 64-bit.
+          Windows 10/11, 64-bit.
 
           ### First run
           - **"Windows protected your PC"**: Wackro isn't code-signed yet. Click **More info > Run anyway**.
@@ -81,6 +90,7 @@ jobs:
           $changes
 
           ### SHA-256
+          - Wackro-Setup-$version.exe: ``$setup``
           - Wackro.exe: ``$normal``
           - Wackro-Admin.exe: ``$admin``
           "@
@@ -92,12 +102,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ steps.version.outputs.tag }}"
+          $files = @("dist\Wackro-Setup-${{ steps.version.outputs.version }}.exe", "dist\Wackro.exe", "dist\Wackro-Admin.exe")
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             # Release already exists (e.g. made on github.com): replace its exes and notes
-            gh release upload $tag dist\Wackro.exe dist\Wackro-Admin.exe --clobber
+            gh release upload $tag $files --clobber
             gh release edit $tag --notes-file release-notes.md
           } else {
-            gh release create $tag dist\Wackro.exe dist\Wackro-Admin.exe --title "Wackro ${{ steps.version.outputs.version }}" --notes-file release-notes.md --target $env:GITHUB_SHA
+            gh release create $tag $files --title "Wackro ${{ steps.version.outputs.version }}" --notes-file release-notes.md --target $env:GITHUB_SHA
           }
           if ($LASTEXITCODE -ne 0) { throw "Publishing the release failed" }

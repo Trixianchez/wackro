@@ -10,10 +10,9 @@ Grab the latest version from **[Releases](../../releases/latest)**.
 
 | File | Use it when |
 |---|---|
-| `Wackro.exe` | **Most people.** Normal recording and playback. |
-| `Wackro-Admin.exe` | Only when you need to play into programs running as administrator. It asks for admin rights (UAC) when it starts. |
-
-There's no installer. Download the exe and run it.
+| `Wackro-Setup-<version>.exe` | **Most people.** Installs Wackro for you or for all users, adds Start menu shortcuts (plus "Wackro (Administrator)"), asks where to save recordings, and uninstalls from Settings > Apps. |
+| `Wackro.exe` | Portable: no install, just download and run. |
+| `Wackro-Admin.exe` | Portable, always asks for admin rights (UAC). Only for playing into programs running as administrator. |
 
 ### "Windows protected your PC"?
 

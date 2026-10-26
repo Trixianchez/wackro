@@ -49,6 +49,7 @@ VK_MENU = 0x12
 KEYEVENTF_KEYUP = 0x2
 _EXE_CACHE_SECONDS = 5.0
 CSIDL_PERSONAL = 0x0005   # SHGetFolderPathW: the Documents folder
+SW_SHOWNORMAL = 1
 ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x00000001, 0x00000002
 DESKTOP_SWITCHDESKTOP = 0x0100
 MB_ICONEXCLAMATION = 0x30
@@ -163,6 +164,14 @@ class NullWin32:
         """The user's Documents folder as Windows knows it (also when OneDrive moved it), or
         None if unknown."""
         return None
+
+    def is_admin(self) -> bool:
+        """True if this process runs with administrator rights."""
+        return False
+
+    def run_as_admin(self, program: str, parameters: str) -> bool:
+        """Start `program` with administrator rights (the UAC prompt). True if it started."""
+        return False
 
 
 class Win32(NullWin32):
@@ -459,18 +468,43 @@ class Win32(NullWin32):
         """SHGetFolderPathW(CSIDL_PERSONAL): follows a Documents folder moved by OneDrive or by
         hand, unlike %USERPROFILE%\\Documents."""
         try:
-            ctypes, w = self._ctypes, self._wintypes
-            if getattr(self, "shell32", None) is None:
-                self.shell32 = ctypes.windll.shell32
-                self.shell32.SHGetFolderPathW.argtypes = [w.HWND, ctypes.c_int, w.HANDLE, w.DWORD, w.LPWSTR]
-                self.shell32.SHGetFolderPathW.restype = ctypes.c_long
-            buffer = ctypes.create_unicode_buffer(1024)
-            if self.shell32.SHGetFolderPathW(None, CSIDL_PERSONAL, None, 0, buffer) != 0:
+            buffer = self._ctypes.create_unicode_buffer(1024)
+            if self._shell32().SHGetFolderPathW(None, CSIDL_PERSONAL, None, 0, buffer) != 0:
                 return None
             return buffer.value or None
         except Exception:
             log.warning("Could not ask Windows for the Documents folder", exc_info=True)
             return None
+
+    def _shell32(self):
+        """shell32 with the argument types declared (injectable: set self.shell32 in tests)."""
+        if getattr(self, "shell32", None) is None:
+            ctypes, w = self._ctypes, self._wintypes
+            shell32 = ctypes.windll.shell32
+            shell32.SHGetFolderPathW.argtypes = [w.HWND, ctypes.c_int, w.HANDLE, w.DWORD, w.LPWSTR]
+            shell32.SHGetFolderPathW.restype = ctypes.c_long
+            shell32.IsUserAnAdmin.argtypes = []
+            shell32.IsUserAnAdmin.restype = w.BOOL
+            shell32.ShellExecuteW.argtypes = [w.HWND, w.LPCWSTR, w.LPCWSTR, w.LPCWSTR, w.LPCWSTR, ctypes.c_int]
+            shell32.ShellExecuteW.restype = ctypes.c_void_p
+            self.shell32 = shell32
+        return self.shell32
+
+    def is_admin(self) -> bool:
+        try:
+            return bool(self._shell32().IsUserAnAdmin())
+        except Exception:
+            log.warning("Could not check for administrator rights", exc_info=True)
+            return False
+
+    def run_as_admin(self, program: str, parameters: str) -> bool:
+        """ShellExecuteW with the "runas" verb. Returns False if the user said No to UAC."""
+        try:
+            result = self._shell32().ShellExecuteW(None, "runas", program, parameters, None, SW_SHOWNORMAL)
+            return (result or 0) > 32
+        except Exception:
+            log.warning("Could not restart with administrator rights", exc_info=True)
+            return False
 
     def keep_awake(self, on: bool) -> bool:
         """SetThreadExecutionState. Must be switched off on the same thread it was switched on

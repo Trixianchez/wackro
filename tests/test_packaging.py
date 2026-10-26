@@ -246,5 +246,47 @@ class BuildFilesTests(unittest.TestCase):
         self.assertIn("SmartScreen", text)
 
 
+class InstallerTests(unittest.TestCase):
+    """installer/Wackro.iss has to agree with the code it installs."""
+
+    def setUp(self):
+        self.iss = (ROOT / "installer" / "Wackro.iss").read_text(encoding="utf-8")
+
+    def test_it_installs_the_folder_build_and_both_shortcuts(self):
+        self.assertIn(r'Source: "..\dist\app\Wackro\*"', self.iss)
+        self.assertIn('Parameters: "--admin"', self.iss)
+        import main
+        self.assertEqual(main.ADMIN_FLAG, "--admin")
+        self.assertIn("{autodesktop}", self.iss)
+        self.assertIn("PrivilegesRequiredOverridesAllowed=dialog", self.iss)
+
+    def test_it_waits_for_the_running_app(self):
+        import single_instance
+        self.assertIn("AppMutex=Local\\" + config.APP_NAME, self.iss)
+        self.assertIn('f"Local\\\\{self._name}"', (ROOT / "single_instance.py").read_text(encoding="utf-8"))
+        self.assertEqual(single_instance.SingleInstance.__init__.__defaults__[0], config.APP_NAME)
+
+    def test_the_recordings_folder_file_matches_folders_py(self):
+        import folders
+        self.assertIn("{app}\\" + folders.INSTALL_INFO_NAME, self.iss)
+        self.assertIn('{"recordings_dir": "', self.iss)
+        self.assertIn("{userdocs}\\" + folders.FOLDER_NAME, self.iss)
+
+    def test_uninstall_asks_and_keeps_recordings(self):
+        self.assertIn("{localappdata}\\" + config.APP_NAME, self.iss)
+        self.assertIn("MB_DEFBUTTON2", self.iss)          # "No" is the default answer
+        self.assertIn("recordings are kept", self.iss)
+
+    def test_the_build_and_the_release_make_the_setup(self):
+        build = (ROOT / "build.ps1").read_text(encoding="utf-8")
+        self.assertIn("WACKRO_ONEDIR", build)
+        self.assertIn("installer\\Wackro.iss", build)
+        self.assertIn("/DAppVersion=", build)
+        self.assertIn("ONEDIR", (ROOT / "Wackro.spec").read_text(encoding="utf-8"))
+        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+        self.assertIn("build.ps1 -Installer", workflow)
+        self.assertIn("Wackro-Setup-", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()

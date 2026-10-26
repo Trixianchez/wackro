@@ -364,5 +364,53 @@ class ContextTests(unittest.TestCase):
         self.assertFalse(null.set_alpha(1, 1))
 
 
+class FakeShell32:
+    def __init__(self, admin=1, execute=42, folder=0):
+        self.admin, self.execute, self.folder, self.calls = admin, execute, folder, []
+
+    def IsUserAnAdmin(self):
+        return self.admin
+
+    def ShellExecuteW(self, hwnd, verb, program, parameters, directory, show):
+        self.calls.append((verb, program, parameters, show))
+        return self.execute
+
+    def SHGetFolderPathW(self, hwnd, csidl, token, flags, buffer):
+        buffer.value = r"D:\OneDrive\Documents"
+        return self.folder
+
+
+class ShellTests(unittest.TestCase):
+    def make(self, **kwargs):
+        win, _ = make()
+        win.shell32 = FakeShell32(**kwargs)
+        return win
+
+    def test_is_admin(self):
+        self.assertTrue(self.make(admin=1).is_admin())
+        self.assertFalse(self.make(admin=0).is_admin())
+        self.assertFalse(NullWin32().is_admin())
+
+    def test_run_as_admin_uses_runas_and_reads_the_result(self):
+        win = self.make(execute=42)
+        self.assertTrue(win.run_as_admin("C:\\W\\Wackro.exe", "--admin"))
+        self.assertEqual(win.shell32.calls, [("runas", "C:\\W\\Wackro.exe", "--admin", 1)])
+        self.assertFalse(self.make(execute=5).run_as_admin("x", ""))      # <= 32: refused / failed
+        self.assertFalse(self.make(execute=None).run_as_admin("x", ""))
+        self.assertFalse(NullWin32().run_as_admin("x", ""))
+
+    def test_documents_folder(self):
+        self.assertEqual(self.make().documents_folder(), r"D:\OneDrive\Documents")
+        self.assertIsNone(self.make(folder=1).documents_folder())       # an error HRESULT
+        self.assertIsNone(NullWin32().documents_folder())
+
+    def test_a_crashing_shell32_never_raises(self):
+        win, _ = make()
+        win.shell32 = object()                  # every call raises AttributeError
+        self.assertFalse(win.is_admin())
+        self.assertFalse(win.run_as_admin("x", ""))
+        self.assertIsNone(win.documents_folder())
+
+
 if __name__ == "__main__":
     unittest.main()

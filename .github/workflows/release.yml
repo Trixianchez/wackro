@@ -1,0 +1,103 @@
+# Builds Wackro.exe and Wackro-Admin.exe on GitHub's Windows machine and publishes them as a
+# GitHub Release, so anyone can download them from the repo's Releases page.
+#
+# How to release a new version:
+#   1. Bump APP_VERSION in config.py and add a CHANGELOG.md entry (e.g. 1.7.5).
+#   2. Push a tag with the same number:  git tag v1.7.5  then  git push origin v1.7.5
+#      (or on github.com: Releases > Draft a new release > new tag v1.7.5 > Publish).
+#   Or run it by hand: Actions > Build and release > Run workflow (uses APP_VERSION as the tag).
+name: Build and release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Work out the version
+        id: version
+        shell: pwsh
+        run: |
+          $appVersion = (Select-String -Path config.py -Pattern '^APP_VERSION = "(.+)"').Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $tag = $env:GITHUB_REF_NAME
+            if ($tag -ne "v$appVersion") {
+              throw "Tag $tag doesn't match APP_VERSION $appVersion in config.py. Bump config.py or fix the tag."
+            }
+          } else {
+            $tag = "v$appVersion"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$appVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Test and build both exes
+        shell: pwsh
+        run: |
+          python -m venv venv
+          .\venv\Scripts\Activate.ps1
+          .\build.ps1
+
+      - name: Write release notes with SHA-256 hashes
+        shell: pwsh
+        run: |
+          $normal = (Get-FileHash -Algorithm SHA256 dist\Wackro.exe).Hash
+          $admin = (Get-FileHash -Algorithm SHA256 dist\Wackro-Admin.exe).Hash
+          $version = "${{ steps.version.outputs.version }}"
+          # This version's CHANGELOG section (between its heading and the next one)
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $pattern = '(?ms)^## \[' + [regex]::Escape($version) + '\][^\n]*\n(.*?)(?=^## \[|\z)'
+          $m = [regex]::Match($changelog, $pattern)
+          $changes = if ($m.Success) { $m.Groups[1].Value.Trim() } else { "See CHANGELOG.md." }
+          $notes = @"
+          **Automation that knows when to stop.** Record a task once, play it back exactly, and Wackro stops itself if a popup appears, the wrong program is in front, an app hangs, or the PC locks or sleeps.
+
+          ### Which file?
+          - **Wackro.exe**: use this one.
+          - **Wackro-Admin.exe**: only for playing into programs running as administrator (asks for UAC).
+
+          No installer: download and run. Windows 10/11, 64-bit.
+
+          ### First run
+          - **"Windows protected your PC"**: Wackro isn't code-signed yet. Click **More info > Run anyway**.
+          - **Antivirus warning**: Wackro uses a global keyboard/mouse hook to record and to listen for its hotkeys, which some antivirus tools mistake for a keylogger. It records only while you press Record, never saves window titles, and never connects to the internet. These exes were built from this repo's source by GitHub Actions (see the Actions tab).
+
+          ### Hotkeys
+          ``F9`` record/stop · ``F11`` play/stop · ``F10`` panic stop (change them in Settings > Hotkeys; on laptops hold **Fn** if the F-keys need it)
+
+          ### What's new
+          $changes
+
+          ### SHA-256
+          - Wackro.exe: ``$normal``
+          - Wackro-Admin.exe: ``$admin``
+          "@
+          Set-Content -Path release-notes.md -Value $notes -Encoding utf8
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            # Release already exists (e.g. made on github.com): replace its exes and notes
+            gh release upload $tag dist\Wackro.exe dist\Wackro-Admin.exe --clobber
+            gh release edit $tag --notes-file release-notes.md
+          } else {
+            gh release create $tag dist\Wackro.exe dist\Wackro-Admin.exe --title "Wackro ${{ steps.version.outputs.version }}" --notes-file release-notes.md --target $env:GITHUB_SHA
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Publishing the release failed" }

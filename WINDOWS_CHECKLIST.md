@@ -1,4 +1,4 @@
-# Windows smoke test (Wackro 1.7.4)
+# Windows smoke test (Wackro 1.7.5)
 
 Run through this on a real Windows 10/11 machine and note anything that looks off. Everything
 below was NOT verified in the Linux sandbox the code was built in.
@@ -166,3 +166,11 @@ Build first: `.\build.ps1` (see README.md). Then, from `dist\`:
 
 ## Report back
 Anything that failed or felt odd, with the log file if there was an error box.
+
+## Recordings folder (1.7.5)
+- [ ] Start `Wackro.exe` from **Downloads**. Record something, **File > Save As…**: the box opens in **Documents\Wackro** (created if it wasn't there), NOT in Downloads.
+- [ ] With OneDrive backing up Documents: it's the OneDrive Documents\Wackro (the one File Explorer shows under Documents).
+- [ ] **File > Open…** and Sequence > **Add recordings…** also start there.
+- [ ] **Settings > Recordings folder…** shows that path. **Browse…** to another folder, OK: the status line says the new folder and Save As… starts there. **Open folder** opens it in File Explorer.
+- [ ] Type `abc` (not a full path), OK: a red message, the box stays open. **Reset to default**, OK: back to Documents\Wackro.
+- [ ] Pick a folder on a USB stick, OK, remove the stick, Save As…: the box opens in Documents instead of failing.

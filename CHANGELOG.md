@@ -4,6 +4,21 @@ All notable changes to Wackro (called PyReMouse, then Wackylloop, before 1.7.0).
 
 ## [Unreleased]
 
+## [1.7.5] - 2026-10-26
+
+### Added
+- **Recordings folder** (Settings > Recordings folder…): every Save / Open box (recordings,
+  sequences, Add recordings) now starts in one folder, `Documents\Wackro` by default. Pick your
+  own with Browse…, go back with Reset to default, or open it in File Explorer. Documents is asked
+  from Windows, so a OneDrive-moved Documents works. The folder is created when needed; if it
+  can't be (missing drive, no rights), the box starts in Documents instead. New `folders.py`.
+- Ready for the installer: a recordings folder chosen in Setup (`install.json` next to the exe) is
+  used as the default.
+
+### Fixed
+- **Recordings were saved next to the exe** (e.g. in Downloads): the Save / Open boxes had no
+  starting folder, so Windows used the folder Wackro was started from.
+
 ## [1.7.4] - 2026-10-26
 
 ### Changed

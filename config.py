@@ -10,7 +10,7 @@ from pathlib import Path
 
 # ---- App info ---------------------------------------------------------------------------
 APP_NAME = "Wackro"
-APP_VERSION = "1.7.4"
+APP_VERSION = "1.7.5"
 
 # Window icon, relative to the project root (and bundled into the .exe by Wackro.spec).
 ICON_RELATIVE_PATH = Path("assets") / "Wackro.ico"

@@ -34,6 +34,7 @@ DEFAULTS = {
     "fs_locked": True, "fs_screen": True, "fs_sleep": True,
     "time_limit_on": False, "time_limit": 60.0, "keep_awake": True, "blackout": False,
     "blackout_after": 5.0, "blackout_dim": True, "blackout_text": True, "blackout_hotkey": None,
+    "recordings_dir": None,
 }
 REPEAT_KEYS = ("repeat", "infinite", "delay")
 
@@ -152,6 +153,14 @@ class NewFieldTests(unittest.TestCase):
         first["hotkeys"]["record"]["mods"].append("alt")
         self.assertEqual(settings.default_settings()["hotkeys"]["record"]["mods"], [])
         self.assertEqual(hotkey_spec.DEFAULT_BINDINGS["record"]["mods"], [])
+
+    def test_recordings_dir_keeps_absolute_folders_only(self):
+        folder = str(Path(tempfile.gettempdir()) / "Recs")
+        self.assertEqual(settings.sanitize({"recordings_dir": folder})["recordings_dir"], folder)
+        self.assertEqual(settings.sanitize({"recordings_dir": "  " + folder + " "})["recordings_dir"], folder)
+        for bad in ("relative", "", 7, ["x"], None):
+            with self.subTest(bad=bad):
+                self.assertIsNone(settings.sanitize({"recordings_dir": bad})["recordings_dir"])
 
     def test_old_settings_file_from_1_2_still_loads(self):
         self.assertEqual(settings.sanitize({"repeat": 3, "infinite": True, "delay": 1.0}),

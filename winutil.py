@@ -48,6 +48,7 @@ MONITORINFOF_PRIMARY = 0x1
 VK_MENU = 0x12
 KEYEVENTF_KEYUP = 0x2
 _EXE_CACHE_SECONDS = 5.0
+CSIDL_PERSONAL = 0x0005   # SHGetFolderPathW: the Documents folder
 ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x00000001, 0x00000002
 DESKTOP_SWITCHDESKTOP = 0x0100
 MB_ICONEXCLAMATION = 0x30
@@ -157,6 +158,11 @@ class NullWin32:
         """True when the PC is locked or a UAC / Ctrl+Alt+Del screen is up: input can't reach
         programs then."""
         return False
+
+    def documents_folder(self):
+        """The user's Documents folder as Windows knows it (also when OneDrive moved it), or
+        None if unknown."""
+        return None
 
 
 class Win32(NullWin32):
@@ -448,6 +454,23 @@ class Win32(NullWin32):
         except Exception:
             log.debug("Could not change a window's opacity", exc_info=True)
             return False
+
+    def documents_folder(self):
+        """SHGetFolderPathW(CSIDL_PERSONAL): follows a Documents folder moved by OneDrive or by
+        hand, unlike %USERPROFILE%\\Documents."""
+        try:
+            ctypes, w = self._ctypes, self._wintypes
+            if getattr(self, "shell32", None) is None:
+                self.shell32 = ctypes.windll.shell32
+                self.shell32.SHGetFolderPathW.argtypes = [w.HWND, ctypes.c_int, w.HANDLE, w.DWORD, w.LPWSTR]
+                self.shell32.SHGetFolderPathW.restype = ctypes.c_long
+            buffer = ctypes.create_unicode_buffer(1024)
+            if self.shell32.SHGetFolderPathW(None, CSIDL_PERSONAL, None, 0, buffer) != 0:
+                return None
+            return buffer.value or None
+        except Exception:
+            log.warning("Could not ask Windows for the Documents folder", exc_info=True)
+            return None
 
     def keep_awake(self, on: bool) -> bool:
         """SetThreadExecutionState. Must be switched off on the same thread it was switched on

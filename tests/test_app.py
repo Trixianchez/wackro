@@ -388,6 +388,9 @@ class FakeDialogs:
     def ask_blackout(self, options, main_bindings):
         return self._answer("blackout", options, main_bindings)
 
+    def ask_recordings_folder(self, current, default):
+        return self._answer("recordings_folder", current, default)
+
     def ask_sequence(self, sequence, current=None):
         self.asked.append(("sequence", sequence, current))
         answer = self.answers.get("sequence")
@@ -1103,6 +1106,50 @@ class TestFailsafes(AppCase):
         self.assertIn("9 of 10", self.status)
         saved = json.loads(self.settings_path.read_text(encoding="utf-8"))
         self.assertFalse(saved["fs_keys"])
+
+    def test_recordings_folder_dialog(self):
+        own = str(Path(self.settings_path).parent / "MyRecs")
+        self.dialogs.answers["recordings_folder"] = {"recordings_dir": own}
+        self.app.open_recordings_folder()
+        name, current, default = self.dialogs.asked[-1]
+        self.assertEqual(name, "recordings_folder")
+        self.assertEqual(current, default)                 # nothing picked yet: the default
+        self.assertTrue(default.endswith("Wackro"))
+        self.assertEqual(self.app._settings["recordings_dir"], own)
+        self.assertIn(own, self.status)
+        saved = json.loads(self.settings_path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["recordings_dir"], own)
+        self.assertEqual(self.app.recordings_folder(), own)   # Save / Open boxes start there now
+        self.assertTrue(Path(own).is_dir())
+        self.dialogs.answers["recordings_folder"] = {"recordings_dir": None}   # Reset to default
+        self.app.open_recordings_folder()
+        self.assertEqual(self.dialogs.asked[-1][1], own)
+        self.assertIsNone(self.app._settings["recordings_dir"])
+
+    def test_recordings_folder_cancel_and_menu(self):
+        self.dialogs.answers["recordings_folder"] = None
+        self.app.open_recordings_folder()
+        self.assertIsNone(self.app._settings["recordings_dir"])
+        labels = [item[0] for item in self.app.menu_items("Settings") if item]
+        self.assertIn("Recordings folder…", labels)
+        self.assertEqual(self.dialogs.start_dir, self.app.recordings_folder)
+
+    def test_file_boxes_start_in_the_recordings_folder(self):
+        real = app_module.Dialogs(self.app)
+        real.start_dir = lambda: "/some/folder"
+        with mock.patch.object(app_module.filedialog, "asksaveasfilename", return_value="") as save, \
+                mock.patch.object(app_module.filedialog, "askopenfilename", return_value="") as open_, \
+                mock.patch.object(app_module.filedialog, "askopenfilenames", return_value=()) as many:
+            real.save_path()
+            real.open_path()
+            real.save_sequence_path()
+            real.recording_paths(self.app)
+        for call in (save.call_args_list[0], open_.call_args, save.call_args_list[1], many.call_args):
+            self.assertEqual(call.kwargs["initialdir"], "/some/folder")
+        real.start_dir = lambda: (_ for _ in ()).throw(OSError("gone"))   # never blocks the box
+        with mock.patch.object(app_module.filedialog, "asksaveasfilename", return_value="") as save:
+            real.save_path()
+        self.assertNotIn("initialdir", save.call_args.kwargs)
 
     def test_safety_cancel_and_menu(self):
         self.app.open_safety()

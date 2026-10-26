@@ -23,7 +23,9 @@
       "keep_awake": true,                                    Settings > Blackout & power
       "blackout": false, "blackout_after": 5.0,              black screen after N minutes of playing
       "blackout_dim": true, "blackout_text": true,           brightness 0 / small status line on it
-      "blackout_hotkey": null                                optional hotkey, e.g. {"mods": [], "vk": 123}
+      "blackout_hotkey": null,                               optional hotkey, e.g. {"mods": [], "vk": 123}
+      "recordings_dir": null                                 Settings > Recordings folder; null = default
+                                                             (Setup's choice, else Documents\\Wackro)
     }
 
 repeat    number of runs, 1 to MAX_REPEAT (ignored while "infinite" is true)
@@ -61,6 +63,7 @@ from config import (
 )
 from failsafe import DEFAULT_OPTIONS as FAILSAFE_DEFAULTS
 from failsafe import SENSITIVITY_PIXELS
+from folders import valid_folder_text
 from hotkey_spec import DEFAULT_BINDINGS, sanitize_binding, sanitize_bindings, same_keys
 
 log = logging.getLogger(__name__)
@@ -92,6 +95,7 @@ def default_settings() -> dict:
     result.update(FAILSAFE_DEFAULTS)
     result.update(time_limit_on=False, time_limit=60.0, keep_awake=True, blackout=False,
                   blackout_after=5.0, blackout_dim=True, blackout_text=True, blackout_hotkey=None)
+    result["recordings_dir"] = None
     return result
 
 
@@ -159,6 +163,8 @@ def sanitize(data) -> dict:
     hotkey = sanitize_binding(data.get("blackout_hotkey")) if data.get("blackout_hotkey") is not None else None
     if hotkey is not None and not any(same_keys(hotkey, b) for b in result["hotkeys"].values()):
         result["blackout_hotkey"] = hotkey
+    if valid_folder_text(data.get("recordings_dir")):
+        result["recordings_dir"] = data["recordings_dir"].strip()
     return result
 
 

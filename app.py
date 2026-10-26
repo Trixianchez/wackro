@@ -63,6 +63,7 @@ from typing import Optional
 import customtkinter as ctk
 
 import failsafe
+import folders
 import ui_dialogs as ui
 from blackout import Blackout
 from brightness import Dimmer
@@ -204,6 +205,16 @@ class Dialogs:
     def __init__(self, parent, win32=None):
         self._parent = parent
         self._win = win32
+        self.start_dir = None   # callable -> folder the Save / Open boxes start in (the App sets it)
+
+    def _start(self) -> dict:
+        """initialdir for a file box: the recordings folder (folders.py), if known."""
+        try:
+            folder = self.start_dir() if self.start_dir is not None else None
+        except Exception:
+            log.warning("Could not work out the recordings folder", exc_info=True)
+            folder = None
+        return {"initialdir": folder} if folder else {}
 
     def _win32(self):
         if self._win is None:
@@ -247,25 +258,28 @@ class Dialogs:
                 title="Save recording",
                 defaultextension=RECORDING_EXTENSION,
                 filetypes=RECORDING_FILE_TYPES,
+                **self._start(),
             ) or None
 
     def open_path(self) -> Optional[str]:
         with self._owner() as owner:
             return filedialog.askopenfilename(
-                parent=owner, title="Open a recording or sequence", filetypes=OPEN_FILE_TYPES
+                parent=owner, title="Open a recording or sequence", filetypes=OPEN_FILE_TYPES,
+                **self._start(),
             ) or None
 
     def save_sequence_path(self) -> Optional[str]:
         with self._owner() as owner:
             return filedialog.asksaveasfilename(
                 parent=owner, title="Save sequence", defaultextension=seq.SEQUENCE_EXTENSION,
-                filetypes=SEQUENCE_FILE_TYPES,
+                filetypes=SEQUENCE_FILE_TYPES, **self._start(),
             ) or None
 
     def recording_paths(self, parent) -> list:
         """Sequence window > Add recordings…: several recording files at once."""
         return list(filedialog.askopenfilenames(
-            parent=parent, title="Add recordings to the sequence", filetypes=RECORDING_FILE_TYPES) or [])
+            parent=parent, title="Add recordings to the sequence", filetypes=RECORDING_FILE_TYPES,
+            **self._start()) or [])
 
     def ask_sequence(self, sequence: dict, current=None) -> Optional[dict]:
         return ui.SequenceDialog(self._parent, sequence, add_files=self.recording_paths, current=current).run()
@@ -304,6 +318,9 @@ class Dialogs:
 
     def ask_blackout(self, options: dict, main_bindings: dict) -> Optional[dict]:
         return ui.BlackoutDialog(self._parent, options, main_bindings).run()
+
+    def ask_recordings_folder(self, current: str, default: str) -> Optional[dict]:
+        return ui.RecordingsFolderDialog(self._parent, current, default).run()
 
 
 class _GuardedDialogs:
@@ -444,6 +461,7 @@ class App(ctk.CTk):
         self._inbox_job = None
         self._settings_path = settings_path       # None = the default file (config.SETTINGS_PATH)
         self._settings = load_settings(settings_path)
+        self._raw_dialogs.start_dir = self.recordings_folder
         self._play_options = {"repeat": 1, "delay": 0.0, "speed": 1.0}   # the running / pending playback
         self._blacked = False          # the blackout is up
         self._play_began = 0.0         # self._clock() when the player really started
@@ -649,6 +667,7 @@ class App(ctk.CTk):
                 ("Hotkeys…", self.open_hotkeys, idle),
                 ("Safety…", self.open_safety, idle),
                 ("Blackout & power…", self.open_blackout, idle),
+                ("Recordings folder…", self.open_recordings_folder, idle),
                 None,
                 *[(check(indicator == style, f"Indicator: {INDICATOR_LABELS[style]}"),
                    lambda s=style: self.set_indicator(s)) for style in ("both", "border", "pill", "off")],
@@ -787,6 +806,30 @@ class App(ctk.CTk):
         self._update_hotkey_labels()
         self._set_status("Hotkeys: " + ", ".join(
             f"{ACTION_LABELS[a]} {self._binding_label(a)}" for a in ACTIONS) + ".")
+
+    def _documents_from_windows(self):
+        try:
+            return winutil.get_win32().documents_folder()
+        except Exception:
+            return None
+
+    def recordings_folder(self) -> str:
+        """Where Save / Open boxes start (created if needed). See folders.py."""
+        return folders.dialog_start_dir(self._settings, self._documents_from_windows)
+
+    def open_recordings_folder(self) -> None:
+        """Settings > Recordings folder…"""
+        if self._state != IDLE:
+            return
+        current = folders.recordings_dir(self._settings, self._documents_from_windows)
+        default = folders.default_recordings_dir(self._documents_from_windows)
+        result = self._dialogs.ask_recordings_folder(str(current), str(default))
+        if result is None:
+            return
+        self._settings["recordings_dir"] = result.get("recordings_dir")
+        self._save_settings()
+        shown = folders.recordings_dir(self._settings, self._documents_from_windows)
+        self._set_status(f"Recordings are saved in {shown}.")
 
     def _stop_keys(self) -> str:
         """'F11 or F10': what stops playback."""

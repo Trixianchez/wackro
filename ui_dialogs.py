@@ -756,6 +756,89 @@ def sanitize_hotkey(binding):
     return sanitize_binding(binding) if binding is not None else None
 
 
+# ---- Settings > Recordings folder ------------------------------------------------------
+
+def _ask_directory(parent, start: str) -> Optional[str]:
+    from tkinter import filedialog
+    return filedialog.askdirectory(parent=parent, initialdir=start or None, mustexist=False,
+                                   title="Where to save recordings") or None
+
+
+def _open_in_explorer(path: str) -> None:
+    if sys.platform == "win32":
+        import os
+        os.startfile(path)   # noqa: S606 - opens the folder in File Explorer
+
+
+class RecordingsFolderDialog(BaseDialog):
+    """Where Save / Open boxes start. Result: {"recordings_dir": "<path>"} for a folder of the
+    user's own, {"recordings_dir": None} for the default, None if cancelled. The folder is
+    created on OK, so a folder that can't be made (no rights, missing drive) keeps the box open."""
+
+    def __init__(self, parent, current: str, default: str, browse=None, open_folder=None, make_dir=None):
+        super().__init__(parent, "Recordings folder")
+        self.default = default
+        self._browse = browse or _ask_directory
+        self._open_folder = open_folder or _open_in_explorer
+        if make_dir is None:
+            from folders import ensure_dir
+            make_dir = ensure_dir
+        self._make_dir = make_dir
+        self.heading(self.body, "Where to save recordings")
+        self.path_entry = entry(self.body, current, width=380)
+        self.path_entry.configure(justify="left")
+        self.path_entry.pack(fill="x")
+        row = ctk.CTkFrame(self.body, fg_color="transparent")
+        row.pack(fill="x", pady=(10, 0))
+        self.browse_button = self._small_button(row, "Browse…", self.browse)
+        self.default_button = self._small_button(row, "Reset to default", self.reset)
+        self.open_button = self._small_button(row, "Open folder", self.open_folder)
+        self.note(self.body, f"Save and Open start here. Default: {default}")
+
+    @staticmethod
+    def _small_button(row, text, command):
+        button = ctk.CTkButton(row, text=text, width=10, fg_color=PANEL, hover_color=PANEL_HOVER,
+                               border_width=1, border_color=BORDER, text_color=TEXT, command=command)
+        button.pack(side="left", padx=(0, 8))
+        return button
+
+    def browse(self) -> None:
+        picked = self._browse(self, self.path_entry.get().strip())
+        if picked:
+            set_entry(self.path_entry, str(Path(picked)))
+            self.show_error("")
+
+    def reset(self) -> None:
+        set_entry(self.path_entry, self.default)
+        self.show_error("")
+
+    def open_folder(self) -> None:
+        path = self._checked_path()
+        if path is not None and self._make_dir(Path(path)):
+            try:
+                self._open_folder(path)
+            except Exception:
+                self.show_error("Couldn't open that folder.")
+
+    def _checked_path(self) -> Optional[str]:
+        from folders import valid_folder_text
+        text = self.path_entry.get().strip()
+        if not valid_folder_text(text):
+            self.show_error("Type a full folder path (like C:\\Users\\you\\Documents\\Wackro) or press Browse….")
+            return None
+        return text
+
+    def validate(self):
+        text = self._checked_path()
+        if text is None:
+            raise ValueError(self.error_label.cget("text"))
+        if not self._make_dir(Path(text)):
+            raise ValueError("Wackro can't create or use that folder. Pick another one.")
+        if Path(text) == Path(self.default):
+            return {"recordings_dir": None}
+        return {"recordings_dir": text}
+
+
 # ---- Settings > Hotkeys -----------------------------------------------------------------
 
 class HotkeysDialog(BaseDialog):

@@ -58,7 +58,7 @@ All three can be changed in Settings > Hotkeys. On laptops where the F-keys need
 
 ## Where your stuff lives
 
-Settings and the log live in `%LOCALAPPDATA%\Wackro`. Recordings (`.json`) and sequences (`.wseq`) are saved wherever you choose.
+Recordings (`.json`) and sequences (`.wseq`) go to `Documents\Wackro` by default; change it in **Settings > Recordings folder…**. Settings and the log live in `%LOCALAPPDATA%\Wackro`.
 
 ## Requirements
 

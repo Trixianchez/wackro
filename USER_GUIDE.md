@@ -91,6 +91,9 @@ the built exe).
   pause between rounds, then **Use sequence** and press Play. Saved as a `.wseq` file that has
   copies of its recordings inside, so it works anywhere.
 - **File:** New, Open… (recordings and sequences), Save, Save As…, Hide to tray, Exit.
+- **Recordings folder, Settings > Recordings folder…:** every Save / Open box starts in this
+  folder, `Documents\Wackro` by default (created when needed). Browse… picks another one, Reset to
+  default goes back, Open folder shows it in File Explorer.
 - **Unsaved recordings are never lost by accident:** recording again, New, Open or quitting asks
   *Save changes to the current recording? Yes / No / Cancel*. Yes saves first (the Save dialog
   opens the first time), No throws it away, Cancel leaves everything as it was.

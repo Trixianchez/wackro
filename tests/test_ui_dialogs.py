@@ -525,6 +525,62 @@ def key(keysym, keycode, state=0):
     return SimpleNamespace(keysym=keysym, keycode=keycode, state=state)
 
 
+class RecordingsFolderDialogTests(DialogCase):
+    def make(self, current=None, default=None, **kwargs):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+        self.default = default or str(self.tmp / "Documents" / "Wackro")
+        return self.keep(ui.RecordingsFolderDialog(self.root, current or self.default, self.default, **kwargs))
+
+    def test_shows_the_current_folder(self):
+        dialog = self.make()
+        self.assertEqual(dialog.path_entry.get(), self.default)
+
+    def test_ok_on_the_default_stores_none_and_creates_it(self):
+        dialog = self.make()
+        dialog.ok()
+        self.assertEqual(dialog.result, {"recordings_dir": None})
+        self.assertTrue(Path(self.default).is_dir())
+
+    def test_a_folder_of_your_own(self):
+        dialog = self.make()
+        own = str(self.tmp / "Mine" / "Recs")
+        ui.set_entry(dialog.path_entry, own)
+        dialog.ok()
+        self.assertEqual(dialog.result, {"recordings_dir": own})
+        self.assertTrue(Path(own).is_dir())
+
+    def test_reset_to_default(self):
+        dialog = self.make()
+        ui.set_entry(dialog.path_entry, str(self.tmp / "Other"))
+        dialog.default_button.invoke()
+        self.assertEqual(dialog.path_entry.get(), self.default)
+
+    def test_bad_paths_keep_it_open(self):
+        dialog = self.make(make_dir=lambda path: False)
+        for text, message in (("relative\\folder", "full folder path"), (self.default, "can't create")):
+            with self.subTest(text=text):
+                ui.set_entry(dialog.path_entry, text)
+                dialog.ok()
+                self.assertIsNone(dialog.result)
+                self.assertTrue(dialog.winfo_exists())
+                self.assertIn(message, dialog.error_label.cget("text"))
+
+    def test_browse_and_open_folder_use_the_given_helpers(self):
+        opened = []
+        picked = str(Path(tempfile.gettempdir()) / "Picked")
+        dialog = self.make(browse=lambda parent, start: picked, open_folder=opened.append,
+                           make_dir=lambda path: True)
+        dialog.browse_button.invoke()
+        self.assertEqual(dialog.path_entry.get(), picked)
+        dialog.open_button.invoke()
+        self.assertEqual(opened, [picked])
+        cancel = self.make(browse=lambda parent, start: None)
+        cancel.browse_button.invoke()
+        self.assertEqual(cancel.path_entry.get(), self.default)
+
+
 class HotkeysDialogTests(DialogCase):
     def make(self, bindings=None, windows=True):
         return self.keep(ui.HotkeysDialog(self.root, bindings or hotkey_spec.DEFAULT_BINDINGS, windows=windows))
